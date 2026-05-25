@@ -11,9 +11,6 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     name: Build macOS release
@@ -21,7 +18,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        shell: bash
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --force FETCH_HEAD
 
       - name: Resolve version
         id: version
@@ -33,12 +35,32 @@ jobs:
         run: VERSION="${{ steps.version.outputs.value }}" ./scripts/build-release.sh
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.value }}
-          name: Macster ${{ steps.version.outputs.value }}
-          files: |
-            dist/Macster-${{ steps.version.outputs.value }}.dmg
-            dist/Macster-${{ steps.version.outputs.value }}.zip
-            dist/checksums.txt
-          generate_release_notes: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.value }}
+        shell: bash
+        run: |
+          tag="v$VERSION"
+          title="Macster $VERSION"
+          notes_file="$(mktemp)"
+
+          cat > "$notes_file" <<NOTES
+          Native SwiftUI lid-close awake toggle for macOS.
+
+          Artifacts:
+          - Macster-$VERSION.dmg
+          - Macster-$VERSION.zip
+          - checksums.txt
+          NOTES
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "$title" --notes-file "$notes_file"
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$title" --notes-file "$notes_file"
+          fi
+
+          gh release upload "$tag" \
+            "dist/Macster-$VERSION.dmg" \
+            "dist/Macster-$VERSION.zip" \
+            dist/checksums.txt \
+            --clobber
