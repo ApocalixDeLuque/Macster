@@ -9,7 +9,7 @@ struct MacsterApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(controller)
-                .frame(width: 420, height: 520)
+                .frame(width: 420, height: 450)
                 .fixedSize()
                 .onAppear {
                     controller.refresh()
@@ -21,4 +21,3 @@ struct MacsterApp: App {
         }
     }
 }
-

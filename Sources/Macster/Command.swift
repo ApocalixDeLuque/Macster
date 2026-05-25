@@ -2,6 +2,8 @@ import Foundation
 
 enum PowerError: Error, LocalizedError {
     case commandFailed(command: String, status: Int32, output: String)
+    case missingBundledHelper
+    case unsafeUserName(String)
 
     var errorDescription: String? {
         switch self {
@@ -12,6 +14,10 @@ enum PowerError: Error, LocalizedError {
             }
 
             return "\(command) failed with exit code \(status): \(detail)"
+        case .missingBundledHelper:
+            return "Macster could not find its bundled helper."
+        case let .unsafeUserName(userName):
+            return "Macster cannot install the helper for this macOS user name: \(userName)"
         }
     }
 
@@ -62,10 +68,13 @@ enum Command {
         return try run("/usr/bin/osascript", ["-e", script])
     }
 
+    static func shellEscaped(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+
     private static func appleScriptEscaped(_ value: String) -> String {
         value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
     }
 }
-

@@ -12,8 +12,28 @@ Macster shells out to Apple system tools:
 - `/usr/bin/caffeinate`
 - `/bin/launchctl`
 - `/usr/bin/osascript`
+- `/usr/bin/sudo`
 
-Administrator approval is requested only through macOS' standard authorization prompt for the `pmset` changes.
+Administrator approval is requested through macOS' standard authorization prompt for one-time helper installation. After setup, Macster uses a sudoers allowlist that permits only the current user to run:
+
+```text
+/usr/local/libexec/macsterctl enable
+/usr/local/libexec/macsterctl disable
+```
+
+The helper is installed at:
+
+```text
+/usr/local/libexec/macsterctl
+```
+
+The sudoers file is installed at:
+
+```text
+/etc/sudoers.d/macster
+```
+
+The helper only toggles Macster's `launchd` keep-awake job and the relevant `pmset` settings.
 
 ## Data
 

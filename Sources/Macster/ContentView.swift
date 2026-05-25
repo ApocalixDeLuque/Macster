@@ -16,12 +16,10 @@ struct ContentView: View {
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 22) {
-                Spacer(minLength: 8)
-
+            VStack(spacing: 20) {
                 AppLogo()
 
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Text("Macster")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
@@ -35,17 +33,12 @@ struct ContentView: View {
 
                 StatusPill(status: controller.status)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    SummaryRow(label: "Lid close", value: controller.status.lidCloseLabel)
-                    SummaryRow(label: "System sleep", value: controller.status.sleepLabel)
-                    SummaryRow(label: "Display sleep", value: controller.status.displayLabel)
-                }
-                .padding(16)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
+                Text(controller.status.detail)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.52))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(height: 34, alignment: .center)
 
                 VStack(spacing: 10) {
                     Button {
@@ -92,7 +85,7 @@ struct ContentView: View {
                         .lineLimit(3)
                         .frame(minHeight: 44, alignment: .top)
                 } else {
-                    Text("Admin approval is only used to change macOS power settings.")
+                    Text("Admin approval is only used for one-time helper setup.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.42))
                         .multilineTextAlignment(.center)
@@ -102,7 +95,8 @@ struct ContentView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 28)
-            .padding(.vertical, 26)
+            .padding(.top, 58)
+            .padding(.bottom, 24)
         }
     }
 }
@@ -122,13 +116,13 @@ private struct AppLogo: View {
                     .foregroundStyle(.white)
             }
         }
-        .frame(width: 108, height: 108)
+        .frame(width: 96, height: 96)
         .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.26), radius: 18, x: 0, y: 12)
+        .shadow(color: .black.opacity(0.26), radius: 15, x: 0, y: 10)
     }
 }
 
@@ -152,23 +146,6 @@ private struct StatusPill: View {
     }
 }
 
-private struct SummaryRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.55))
-            Spacer()
-            Text(value)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-        }
-    }
-}
-
 private struct PrimaryButtonStyle: ButtonStyle {
     let enabled: Bool
 
@@ -181,4 +158,3 @@ private struct PrimaryButtonStyle: ButtonStyle {
             )
     }
 }
-

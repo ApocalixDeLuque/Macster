@@ -8,12 +8,17 @@ let package = Package(
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "Macster", targets: ["Macster"])
+        .executable(name: "Macster", targets: ["Macster"]),
+        .executable(name: "MacsterCtl", targets: ["MacsterCtl"])
     ],
     targets: [
         .executableTarget(
             name: "Macster",
             path: "Sources/Macster"
+        ),
+        .executableTarget(
+            name: "MacsterCtl",
+            path: "Sources/MacsterCtl"
         )
     ]
 )

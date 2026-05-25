@@ -12,6 +12,7 @@ It is intentionally small: one native SwiftUI window, no analytics, no network c
 - Stores the current `pmset` power values before enabling.
 - Restores the stored `pmset` values when disabling.
 - Keeps a lightweight `caffeinate` assertion running through `launchd` while enabled.
+- Installs its bundled helper on first use so normal toggles do not need repeated password prompts.
 
 ## Install
 
@@ -26,7 +27,11 @@ Open Macster and press the main button:
 - `Keep Awake on Lid Close` enables lid-close awake mode.
 - `Let Lid Close Sleep` restores normal lid-close behavior.
 
-macOS will ask for administrator approval because changing `pmset` settings requires elevated privileges.
+The first enable or disable installs Macster's bundled helper and may ask for administrator approval. After that setup, normal toggles use a narrow passwordless sudo allowlist for Macster's own helper command.
+
+Touch ID availability for the one-time administrator prompt is controlled by macOS. If your Mac allows Touch ID for administrator authorization, macOS can offer it; otherwise it will ask for the account password.
+
+Macster does not install Homebrew packages, third-party runtimes, or external dependencies. Release builds include everything the app needs, and the app only calls macOS tools that ship with macOS.
 
 ## How It Works
 
@@ -34,14 +39,16 @@ When enabling, Macster:
 
 1. Reads the current AC and battery power settings with `pmset -g custom`.
 2. Saves the settings it changes under Application Support.
-3. Starts a user-level `launchd` job running `/usr/bin/caffeinate -d -i -s`.
-4. Runs `pmset` with administrator privileges to disable sleep.
+3. Installs Macster's bundled helper if it is missing or outdated.
+4. Starts a user-level `launchd` job running `/usr/bin/caffeinate -d -i -s`.
+5. Uses the helper to run `pmset` as root.
 
 When disabling, Macster:
 
-1. Removes the managed keep-awake `launchd` job.
-2. Turns `SleepDisabled` off.
-3. Restores the saved power settings if a backup exists.
+1. Installs Macster's bundled helper if it is missing or outdated.
+2. Removes the managed keep-awake `launchd` job.
+3. Turns `SleepDisabled` off.
+4. Restores the saved power settings if a backup exists.
 
 Backup path:
 
@@ -49,9 +56,34 @@ Backup path:
 ~/Library/Application Support/Macster/power-settings-backup.json
 ```
 
+Helper path:
+
+```text
+/usr/local/libexec/macsterctl
+```
+
+Sudoers allowlist:
+
+```text
+/etc/sudoers.d/macster
+```
+
+The allowlist only permits the current macOS user to run these exact commands without repeated password prompts:
+
+```text
+/usr/local/libexec/macsterctl enable
+/usr/local/libexec/macsterctl disable
+```
+
 ## Commands Used
 
 Enable:
+
+```sh
+/usr/bin/sudo -n /usr/local/libexec/macsterctl enable
+```
+
+The helper runs:
 
 ```sh
 /bin/launchctl submit -l io.github.macster.keepawake -- /usr/bin/caffeinate -d -i -s
@@ -62,8 +94,7 @@ Enable:
 Disable:
 
 ```sh
-/bin/launchctl remove io.github.macster.keepawake
-/usr/bin/pmset -a disablesleep 0
+/usr/bin/sudo -n /usr/local/libexec/macsterctl disable
 ```
 
 If a backup exists, Macster also restores the prior AC and battery values for `sleep`, `disksleep`, `displaysleep`, `standby`, and `powernap`.
@@ -104,7 +135,7 @@ swift run Macster
 Build release artifacts:
 
 ```sh
-VERSION=0.1.0 ./scripts/build-release.sh
+VERSION=0.1.1 ./scripts/build-release.sh
 ```
 
 ## Privacy

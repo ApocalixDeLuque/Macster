@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_NAME="Macster"
-VERSION="${VERSION:-0.1.0}"
+VERSION="${VERSION:-0.1.1}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT_DIR/build"
 DIST_DIR="$ROOT_DIR/dist"
@@ -47,11 +47,14 @@ make_icon 512 2
 
 /usr/bin/iconutil -c icns "$ICONSET_DIR" -o "$RESOURCES_DIR/$APP_NAME.icns"
 
-swift build -c release --package-path "$ROOT_DIR"
+swift build -c release --package-path "$ROOT_DIR" --product "$APP_NAME"
+swift build -c release --package-path "$ROOT_DIR" --product MacsterCtl
 
 cp "$ROOT_DIR/.build/release/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 cp "$ROOT_DIR/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "$LOGO_PATH" "$RESOURCES_DIR/macster.png"
+cp "$ROOT_DIR/.build/release/MacsterCtl" "$RESOURCES_DIR/macsterctl"
+chmod 755 "$RESOURCES_DIR/macsterctl"
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$CONTENTS_DIR/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER:-1}" "$CONTENTS_DIR/Info.plist"

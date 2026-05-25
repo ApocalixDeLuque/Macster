@@ -14,7 +14,8 @@ struct PowerStatus {
         sleepDisabled: nil,
         sleepValue: nil,
         displaySleepValue: nil,
-        keepAwakeJobRunning: false
+        keepAwakeJobRunning: false,
+        helperInstalled: false
     )
 
     let mode: Mode
@@ -22,6 +23,7 @@ struct PowerStatus {
     let sleepValue: String?
     let displaySleepValue: String?
     let keepAwakeJobRunning: Bool
+    let helperInstalled: Bool
 
     var isEnabled: Bool {
         mode == .enabled
@@ -39,9 +41,9 @@ struct PowerStatus {
     var title: String {
         switch mode {
         case .enabled:
-            "Your Mac is set to stay awake when the lid closes."
+            "Lid-close sleep is disabled."
         case .disabled:
-            "Your Mac will use normal lid-close sleep behavior."
+            "Normal lid-close sleep is enabled."
         case .partial:
             "Some keep-awake settings are active."
         case .unknown:
@@ -49,20 +51,19 @@ struct PowerStatus {
         }
     }
 
-    var lidCloseLabel: String {
-        switch sleepDisabled {
-        case .some(true): "Awake"
-        case .some(false): "Normal"
-        case .none: "Unknown"
+    var detail: String {
+        switch mode {
+        case .enabled:
+            return keepAwakeJobRunning ? "macOS SleepDisabled is on. Keep-awake helper is active." : "macOS SleepDisabled is on."
+        case .disabled:
+            return helperInstalled ? "Helper installed. Future toggles should not need a password." : "One-time helper setup will run on first toggle."
+        case .partial:
+            let sleepDisabledValue = sleepDisabled.map { $0 ? "1" : "0" } ?? "unknown"
+            let helperValue = keepAwakeJobRunning ? "active" : "off"
+            return "SleepDisabled=\(sleepDisabledValue). Keep-awake helper=\(helperValue)."
+        case .unknown:
+            return "Unable to read pmset state."
         }
-    }
-
-    var sleepLabel: String {
-        sleepValue.map { $0 == "0" ? "Never" : "\($0) min" } ?? "Unknown"
-    }
-
-    var displayLabel: String {
-        displaySleepValue.map { $0 == "0" ? "Never" : "\($0) min" } ?? "Unknown"
     }
 
     var tint: Color {
@@ -77,6 +78,8 @@ struct PowerStatus {
 
 final class PowerService: @unchecked Sendable {
     private let activeLabel = "io.github.macster.keepawake"
+    private let helperPath = "/usr/local/libexec/macsterctl"
+    private let sudoersPath = "/etc/sudoers.d/macster"
     private let touchedKeys = ["sleep", "disksleep", "displaysleep", "standby", "powernap"]
 
     func readStatus() throws -> PowerStatus {
@@ -85,6 +88,7 @@ final class PowerService: @unchecked Sendable {
         let sleepValue = Self.extractValue(named: "sleep", from: pmset)
         let displaySleepValue = Self.extractValue(named: "displaysleep", from: pmset)
         let jobRunning = isAnyKeepAwakeJobRunning()
+        let helperInstalled = isCurrentHelperInstalled()
 
         let mode: PowerStatus.Mode
         if sleepDisabled == true {
@@ -102,35 +106,25 @@ final class PowerService: @unchecked Sendable {
             sleepDisabled: sleepDisabled,
             sleepValue: sleepValue,
             displaySleepValue: displaySleepValue,
-            keepAwakeJobRunning: jobRunning
+            keepAwakeJobRunning: jobRunning,
+            helperInstalled: helperInstalled
         )
     }
 
     func enable() throws {
+        try installPrivilegedHelperIfNeeded()
+
         let status = try readStatus()
         if status.sleepDisabled != true {
             try PowerBackupStore.saveCurrentSettingsIfNeeded(keys: touchedKeys)
         }
 
-        removeKeepAwakeJobs()
-        try Command.run("/bin/launchctl", ["submit", "-l", activeLabel, "--", "/usr/bin/caffeinate", "-d", "-i", "-s"])
-
-        let command = "/usr/bin/pmset -a sleep 0 disksleep 0 displaysleep 0 standby 0 powernap 0 && /usr/bin/pmset -a disablesleep 1"
-        try Command.runWithAdministratorPrivileges(command)
+        try runPrivilegedHelper("enable")
     }
 
     func disable() throws {
-        removeKeepAwakeJobs()
-
-        let command: String
-        if let backup = try PowerBackupStore.load() {
-            command = Self.restoreCommand(from: backup)
-        } else {
-            command = "/usr/bin/pmset -a disablesleep 0"
-        }
-
-        try Command.runWithAdministratorPrivileges(command)
-        try PowerBackupStore.remove()
+        try installPrivilegedHelperIfNeeded()
+        try runPrivilegedHelper("disable")
     }
 
     private func isAnyKeepAwakeJobRunning() -> Bool {
@@ -138,39 +132,69 @@ final class PowerService: @unchecked Sendable {
         return result?.contains("state = running") == true
     }
 
-    private func removeKeepAwakeJobs() {
-        _ = try? Command.run("/bin/launchctl", ["remove", activeLabel])
-    }
-
-    private static func restoreCommand(from backup: PowerBackup) -> String {
-        var commands = ["/usr/bin/pmset -a disablesleep 0"]
-
-        if !backup.battery.isEmpty {
-            commands.append("/usr/bin/pmset -b \(settingsArguments(backup.battery))")
+    private func isCurrentHelperInstalled() -> Bool {
+        guard FileManager.default.isExecutableFile(atPath: helperPath) else {
+            return false
         }
 
-        if !backup.ac.isEmpty {
-            commands.append("/usr/bin/pmset -c \(settingsArguments(backup.ac))")
+        guard let output = try? Command.run(helperPath, ["version"]) else {
+            return false
         }
 
-        return commands.joined(separator: " && ")
+        return output.trimmingCharacters(in: .whitespacesAndNewlines) == MacsterVersion.current
     }
 
-    private static func settingsArguments(_ settings: [String: String]) -> String {
-        let order = ["sleep", "disksleep", "displaysleep", "standby", "powernap"]
-        return order.compactMap { key in
-            guard let value = settings[key] else { return nil }
-            return "\(key) \(shellEscaped(value))"
-        }.joined(separator: " ")
-    }
-
-    private static func shellEscaped(_ value: String) -> String {
-        let safeCharacters = CharacterSet(charactersIn: "0123456789")
-        if value.unicodeScalars.allSatisfy({ safeCharacters.contains($0) }) {
-            return value
+    private func installPrivilegedHelperIfNeeded() throws {
+        guard !isCurrentHelperInstalled() else {
+            return
         }
 
-        return "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+        guard let bundledHelper = Bundle.main.url(forResource: "macsterctl", withExtension: nil) else {
+            throw PowerError.missingBundledHelper
+        }
+
+        let userName = NSUserName()
+        guard Self.isSafeUserName(userName) else {
+            throw PowerError.unsafeUserName(userName)
+        }
+
+        let tempDirectory = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
+        let installID = UUID().uuidString
+        let installer = tempDirectory.appendingPathComponent("macster-install-\(installID).sh")
+        let helperCopy = tempDirectory.appendingPathComponent("macsterctl-\(installID)")
+
+        try? FileManager.default.removeItem(at: installer)
+        try? FileManager.default.removeItem(at: helperCopy)
+
+        try FileManager.default.copyItem(at: bundledHelper, to: helperCopy)
+        try Self.installScript.write(to: installer, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: installer.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helperCopy.path)
+
+        defer {
+            try? FileManager.default.removeItem(at: installer)
+            try? FileManager.default.removeItem(at: helperCopy)
+        }
+
+        let command = [
+            "/bin/bash",
+            Command.shellEscaped(installer.path),
+            Command.shellEscaped(helperCopy.path),
+            Command.shellEscaped(userName),
+            Command.shellEscaped(MacsterVersion.current),
+            Command.shellEscaped(sudoersPath)
+        ].joined(separator: " ")
+
+        try Command.runWithAdministratorPrivileges(command)
+    }
+
+    private func runPrivilegedHelper(_ action: String) throws {
+        do {
+            try Command.run("/usr/bin/sudo", ["-n", helperPath, action])
+        } catch {
+            try installPrivilegedHelperIfNeeded()
+            try Command.run("/usr/bin/sudo", ["-n", helperPath, action])
+        }
     }
 
     private static func extractValue(named key: String, from output: String) -> String? {
@@ -185,4 +209,47 @@ final class PowerService: @unchecked Sendable {
 
         return nil
     }
+
+    private static func isSafeUserName(_ userName: String) -> Bool {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+        return !userName.isEmpty && userName.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    private static let installScript = """
+    #!/bin/bash
+    set -euo pipefail
+
+    helper_source="$1"
+    target_user="$2"
+    expected_version="$3"
+    sudoers_path="$4"
+
+    case "$target_user" in
+      ""|*[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-]*)
+        echo "Unsafe user name: $target_user" >&2
+        exit 64
+        ;;
+    esac
+
+    /usr/bin/install -d -o root -g wheel -m 755 /usr/local/libexec
+    /usr/bin/install -o root -g wheel -m 755 "$helper_source" /usr/local/libexec/macsterctl
+
+    installed_version="$(/usr/local/libexec/macsterctl version)"
+    if [[ "$installed_version" != "$expected_version" ]]; then
+      echo "Installed helper version mismatch: $installed_version" >&2
+      exit 65
+    fi
+
+    /bin/mkdir -p /etc/sudoers.d
+    tmp="$(/usr/bin/mktemp /tmp/macster-sudoers.XXXXXX)"
+    /bin/cat > "$tmp" <<EOF
+    # Macster allows only its narrow local helper commands without repeated prompts.
+    $target_user ALL=(root) NOPASSWD: /usr/local/libexec/macsterctl enable, /usr/local/libexec/macsterctl disable
+    EOF
+
+    /usr/sbin/visudo -cf "$tmp" >/dev/null
+    /usr/sbin/chown root:wheel "$tmp"
+    /bin/chmod 440 "$tmp"
+    /bin/mv "$tmp" "$sudoers_path"
+    """
 }
