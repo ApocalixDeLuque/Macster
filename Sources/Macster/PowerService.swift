@@ -51,9 +51,9 @@ struct PowerStatus {
 
     var lidCloseLabel: String {
         switch sleepDisabled {
-        case true: "Awake"
-        case false: "Normal"
-        case nil: "Unknown"
+        case .some(true): "Awake"
+        case .some(false): "Normal"
+        case .none: "Unknown"
         }
     }
 
