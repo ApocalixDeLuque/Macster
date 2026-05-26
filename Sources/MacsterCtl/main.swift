@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 
-private let version = "0.1.1"
+private let version = "0.1.2"
 private let launchLabel = "io.github.macster.keepawake"
 private let backupRelativePath = "Library/Application Support/Macster/power-settings-backup.json"
 private let restoredKeys = ["sleep", "disksleep", "displaysleep", "standby", "powernap"]

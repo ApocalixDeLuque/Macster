@@ -33,13 +33,6 @@ struct ContentView: View {
 
                 StatusPill(status: controller.status)
 
-                Text(controller.status.detail)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.52))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .frame(height: 34, alignment: .center)
-
                 VStack(spacing: 10) {
                     Button {
                         controller.toggle()
@@ -85,17 +78,14 @@ struct ContentView: View {
                         .lineLimit(3)
                         .frame(minHeight: 44, alignment: .top)
                 } else {
-                    Text("Admin approval is only used for one-time helper setup.")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.42))
-                        .multilineTextAlignment(.center)
-                        .frame(minHeight: 44, alignment: .top)
+                    Color.clear
+                        .frame(height: 24)
                 }
 
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 28)
-            .padding(.top, 58)
+            .padding(.top, 78)
             .padding(.bottom, 24)
         }
     }

@@ -51,21 +51,6 @@ struct PowerStatus {
         }
     }
 
-    var detail: String {
-        switch mode {
-        case .enabled:
-            return keepAwakeJobRunning ? "macOS SleepDisabled is on. Keep-awake helper is active." : "macOS SleepDisabled is on."
-        case .disabled:
-            return helperInstalled ? "Helper installed. Future toggles should not need a password." : "One-time helper setup will run on first toggle."
-        case .partial:
-            let sleepDisabledValue = sleepDisabled.map { $0 ? "1" : "0" } ?? "unknown"
-            let helperValue = keepAwakeJobRunning ? "active" : "off"
-            return "SleepDisabled=\(sleepDisabledValue). Keep-awake helper=\(helperValue)."
-        case .unknown:
-            return "Unable to read pmset state."
-        }
-    }
-
     var tint: Color {
         switch mode {
         case .enabled: Color(red: 0.34, green: 0.92, blue: 0.56)

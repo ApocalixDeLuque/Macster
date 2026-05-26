@@ -1,109 +1,118 @@
-# Macster
+<div align="center">
+  <img src="assets/macster.png" alt="Macster logo" width="96" height="96">
 
-Macster is a tiny macOS app for toggling lid-close awake mode.
+  # Macster
 
-It is intentionally small: one native SwiftUI window, no analytics, no network calls, no background updater, and no bundled services. The app only wraps the macOS power-management commands needed to enable or disable lid-close awake behavior.
+  A tiny native macOS toggle for lid-close awake mode.
 
-## What It Does
+  [![Release](https://img.shields.io/github/v/release/ApocalixDeLuque/Macster?style=for-the-badge)](https://github.com/ApocalixDeLuque/Macster/releases/latest)
+  [![Release Build](https://img.shields.io/github/actions/workflow/status/ApocalixDeLuque/Macster/release.yml?branch=main&style=for-the-badge&label=release)](https://github.com/ApocalixDeLuque/Macster/actions/workflows/release.yml)
+  [![License](https://img.shields.io/github/license/ApocalixDeLuque/Macster?style=for-the-badge)](LICENSE)
+  [![macOS](https://img.shields.io/badge/macOS-13%2B-111111?style=for-the-badge&logo=apple)](https://www.apple.com/macos/)
+  [![Swift](https://img.shields.io/badge/Swift-6-FA7343?style=for-the-badge&logo=swift&logoColor=white)](Package.swift)
 
-- Shows whether lid-close awake mode is enabled.
-- Enables the mode with one button.
-- Disables the mode with one button.
-- Stores the current `pmset` power values before enabling.
-- Restores the stored `pmset` values when disabling.
-- Keeps a lightweight `caffeinate` assertion running through `launchd` while enabled.
-- Installs its bundled helper on first use so normal toggles do not need repeated password prompts.
+  <br>
+
+  <img src="docs/assets/macster-app.png" alt="Macster app screenshot" width="420">
+</div>
+
+## Why
+
+Macster replaces a long terminal command with a small visual toggle. It is built for clamshell setups, external displays, remote sessions, downloads, and long-running local work where the Mac should stay awake after the lid closes.
+
+## Highlights
+
+| Area | Detail |
+| --- | --- |
+| UI | One native SwiftUI window with a status badge, one primary toggle, and refresh. |
+| Runtime | No web view, no analytics, no updater, no network calls. |
+| Dependencies | No Homebrew packages or third-party runtimes. Release builds include the bundled helper. |
+| Safety | The helper is installed once and allowlisted only for Macster's exact enable/disable commands. |
+| Portability | No hardcoded local paths, IP addresses, hostnames, device names, or user names in the source. |
 
 ## Install
 
-Download the latest `.dmg` from the GitHub Releases page, open it, and drag `Macster.app` into Applications.
+1. Download the latest `Macster-<version>.dmg` from [Releases](https://github.com/ApocalixDeLuque/Macster/releases/latest).
+2. Open the DMG.
+3. Drag `Macster.app` into Applications.
+4. Open Macster.
 
-The app is ad-hoc signed for local/open-source distribution. macOS may show a Gatekeeper warning on first launch if the release is not notarized.
+> [!NOTE]
+> Macster is ad-hoc signed for open-source distribution. If macOS Gatekeeper blocks the first launch, open it from Finder with right click -> Open.
 
 ## Usage
 
-Open Macster and press the main button:
+Open Macster and press the main button.
 
-- `Keep Awake on Lid Close` enables lid-close awake mode.
-- `Let Lid Close Sleep` restores normal lid-close behavior.
+| Button | Result |
+| --- | --- |
+| `Keep Awake on Lid Close` | Disables macOS sleep for lid-close/clamshell use. |
+| `Let Lid Close Sleep` | Restores normal lid-close sleep behavior. |
 
-The first enable or disable installs Macster's bundled helper and may ask for administrator approval. After that setup, normal toggles use a narrow passwordless sudo allowlist for Macster's own helper command.
+The first toggle may ask for administrator approval to install Macster's helper. After that, normal toggles should not ask for a password because the helper is allowlisted for only the two Macster commands.
 
 Touch ID availability for the one-time administrator prompt is controlled by macOS. If your Mac allows Touch ID for administrator authorization, macOS can offer it; otherwise it will ask for the account password.
 
-Macster does not install Homebrew packages, third-party runtimes, or external dependencies. Release builds include everything the app needs, and the app only calls macOS tools that ship with macOS.
-
 ## How It Works
+
+Macster reads and writes macOS power settings with Apple-provided tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `/usr/bin/pmset` | Reads and updates power-management values. |
+| `/usr/bin/caffeinate` | Holds the active keep-awake assertion. |
+| `/bin/launchctl` | Starts/removes the user-level keep-awake job. |
+| `/usr/bin/sudo` | Runs the installed helper after one-time setup. |
 
 When enabling, Macster:
 
-1. Reads the current AC and battery power settings with `pmset -g custom`.
-2. Saves the settings it changes under Application Support.
-3. Installs Macster's bundled helper if it is missing or outdated.
-4. Starts a user-level `launchd` job running `/usr/bin/caffeinate -d -i -s`.
-5. Uses the helper to run `pmset` as root.
+1. Reads the current AC and battery settings with `pmset -g custom`.
+2. Saves only the settings it changes.
+3. Installs or updates the bundled helper if needed.
+4. Starts the keep-awake job.
+5. Sets `sleep`, `disksleep`, `displaysleep`, `standby`, `powernap`, and `disablesleep`.
 
 When disabling, Macster:
 
-1. Installs Macster's bundled helper if it is missing or outdated.
-2. Removes the managed keep-awake `launchd` job.
+1. Installs or updates the bundled helper if needed.
+2. Removes the keep-awake job.
 3. Turns `SleepDisabled` off.
-4. Restores the saved power settings if a backup exists.
+4. Restores the saved settings if a backup exists.
 
-Backup path:
+### Helper Scope
 
-```text
-~/Library/Application Support/Macster/power-settings-backup.json
-```
-
-Helper path:
+Macster installs:
 
 ```text
 /usr/local/libexec/macsterctl
-```
-
-Sudoers allowlist:
-
-```text
 /etc/sudoers.d/macster
 ```
 
-The allowlist only permits the current macOS user to run these exact commands without repeated password prompts:
+The sudoers file is generated for the current macOS user at install time and only permits these exact commands:
 
 ```text
 /usr/local/libexec/macsterctl enable
 /usr/local/libexec/macsterctl disable
 ```
 
-## Commands Used
+It does not grant shell access, arbitrary `pmset` access, or permission to run other commands.
 
-Enable:
+## Stored Data
 
-```sh
-/usr/bin/sudo -n /usr/local/libexec/macsterctl enable
+Macster stores one local backup file so it can restore your previous power settings:
+
+```text
+~/Library/Application Support/Macster/power-settings-backup.json
 ```
 
-The helper runs:
-
-```sh
-/bin/launchctl submit -l io.github.macster.keepawake -- /usr/bin/caffeinate -d -i -s
-/usr/bin/pmset -a sleep 0 disksleep 0 displaysleep 0 standby 0 powernap 0
-/usr/bin/pmset -a disablesleep 1
-```
-
-Disable:
-
-```sh
-/usr/bin/sudo -n /usr/local/libexec/macsterctl disable
-```
-
-If a backup exists, Macster also restores the prior AC and battery values for `sleep`, `disksleep`, `displaysleep`, `standby`, and `powernap`.
+It does not store credentials, secrets, device identifiers, network addresses, or analytics data.
 
 ## Limitations
 
-Macster controls macOS sleep behavior. Some MacBook models still blank the built-in panel when the physical lid is closed because that behavior is handled by macOS and hardware. The practical goal is to keep the Mac awake for clamshell use, external displays, remote sessions, long-running tasks, and downloads.
+> [!IMPORTANT]
+> Macster controls macOS sleep behavior. Some MacBook models can still blank the built-in panel when the physical lid is closed because that behavior is handled by macOS and hardware. The practical goal is to keep the Mac awake for clamshell use, external displays, remote sessions, long-running tasks, and downloads.
 
-## Build From Source
+## Build
 
 Requirements:
 
@@ -111,7 +120,7 @@ Requirements:
 - Swift 6 or newer
 - Command Line Tools for Xcode
 
-Build:
+Build release artifacts:
 
 ```sh
 ./scripts/build-release.sh
@@ -119,12 +128,12 @@ Build:
 
 Artifacts are written to `dist/`:
 
-- `Macster.app`
-- `Macster-<version>.dmg`
-- `Macster-<version>.zip`
-- `checksums.txt`
-
-## Development
+| Artifact | Purpose |
+| --- | --- |
+| `Macster.app` | App bundle. |
+| `Macster-<version>.dmg` | User-facing installer image. |
+| `Macster-<version>.zip` | Zipped app bundle. |
+| `checksums.txt` | SHA-256 checksums. |
 
 Run locally:
 
@@ -132,16 +141,16 @@ Run locally:
 swift run Macster
 ```
 
-Build release artifacts:
+## Release
+
+Manual release workflow:
 
 ```sh
-VERSION=0.1.1 ./scripts/build-release.sh
+gh workflow run release.yml --repo ApocalixDeLuque/Macster --ref main -f version=0.1.2
 ```
 
-## Privacy
-
-Macster does not collect telemetry, does not make network requests, and does not store personal data. It stores only the local power settings needed to restore your previous state.
+The workflow builds the app, creates/uploads the DMG and ZIP, and publishes checksums.
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

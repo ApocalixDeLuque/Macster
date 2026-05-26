@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_NAME="Macster"
-VERSION="${VERSION:-0.1.1}"
+VERSION="${VERSION:-0.1.2}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT_DIR/build"
 DIST_DIR="$ROOT_DIR/dist"

@@ -1,46 +1,49 @@
-# Security Policy
+# Security
 
-## Reporting
-
-Please open a private security advisory on GitHub if you find a security issue.
+Macster is a local utility. Its security model is simple: it should only change the macOS power settings required for lid-close awake mode, and it should not collect or transmit data.
 
 ## Scope
 
-Macster shells out to Apple system tools:
+| Component | Path | Purpose |
+| --- | --- | --- |
+| App | `Macster.app` | Native SwiftUI interface. |
+| Helper | `/usr/local/libexec/macsterctl` | Runs Macster's enable/disable actions as root. |
+| Allowlist | `/etc/sudoers.d/macster` | Allows only the helper's exact enable/disable commands. |
+| Backup | `~/Library/Application Support/Macster/power-settings-backup.json` | Stores previous power settings for restore. |
 
-- `/usr/bin/pmset`
-- `/usr/bin/caffeinate`
-- `/bin/launchctl`
-- `/usr/bin/osascript`
-- `/usr/bin/sudo`
+## Privileged Commands
 
-Administrator approval is requested through macOS' standard authorization prompt for one-time helper installation. After setup, Macster uses a sudoers allowlist that permits only the current user to run:
+The sudoers allowlist permits only:
 
 ```text
 /usr/local/libexec/macsterctl enable
 /usr/local/libexec/macsterctl disable
 ```
 
-The helper is installed at:
+The helper uses Apple-provided tools:
 
-```text
-/usr/local/libexec/macsterctl
-```
+| Tool | Use |
+| --- | --- |
+| `/usr/bin/pmset` | Power setting changes. |
+| `/usr/bin/caffeinate` | Keep-awake assertion. |
+| `/bin/launchctl` | User-level job management. |
 
-The sudoers file is installed at:
+## Data Handling
 
-```text
-/etc/sudoers.d/macster
-```
+Macster does not store:
 
-The helper only toggles Macster's `launchd` keep-awake job and the relevant `pmset` settings.
+- credentials
+- secrets
+- device identifiers
+- IP addresses
+- hostnames
+- analytics events
+- network data
 
-## Data
+Macster stores only the power-setting values needed to restore the previous state.
 
-Macster stores one local backup file with power settings:
+## Reporting
 
-```text
-~/Library/Application Support/Macster/power-settings-backup.json
-```
+Please use GitHub Security Advisories for private reports:
 
-It does not store credentials, secrets, device identifiers, or network data.
+[Open a security advisory](https://github.com/ApocalixDeLuque/Macster/security/advisories/new)
