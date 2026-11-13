@@ -18,17 +18,33 @@
     <string>Macster</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <!-- macster://on, off, toggle, open: for Shortcuts, other apps, and the macster command. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>io.github.macster.Macster</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>macster</string>
+            </array>
+        </dict>
+    </array>
+    <!-- Both versions are set by scripts/build-release.sh: from the VERSION file and the build number. -->
     <key>CFBundleShortVersionString</key>
-    <string>0.1.2</string>
+    <string>0.0.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>14.0</string>
+    <!-- A menu bar app: no Dock icon, no main window. -->
+    <key>LSUIElement</key>
+    <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
-    <key>NSSupportsAutomaticGraphicsSwitching</key>
-    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>MIT License</string>
 </dict>
 </plist>
