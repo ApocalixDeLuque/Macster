@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and build
+    # The same runner as the release workflow, so a green build here means the release will build too.
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        shell: bash
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --force FETCH_HEAD
+
+      - name: Toolchain
+        shell: bash
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Test
+        shell: bash
+        run: ./scripts/test.sh
+
+      - name: Build the universal app, DMG, and ZIP
+        shell: bash
+        run: ./scripts/build-release.sh
