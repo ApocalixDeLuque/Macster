@@ -4,17 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version without leading v
-        required: true
-        default: 0.1.2
+        description: Version to release, without a leading v. Leave empty to use the VERSION file.
+        required: false
+        default: ""
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   build:
-    name: Build macOS release
-    runs-on: macos-latest
+    name: Build and publish the macOS release
+    # Pinned instead of macos-latest: Package.swift needs Swift 6.2 (Xcode 26), and a runner image change shouldn't
+    # silently change what a release is built with.
+    runs-on: macos-26
 
     steps:
       - name: Checkout
@@ -25,33 +31,71 @@ jobs:
           git fetch --depth=1 origin "$GITHUB_SHA"
           git checkout --force FETCH_HEAD
 
-      - name: Resolve version
+      - name: Resolve version and release notes
         id: version
         shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          version="${INPUT_VERSION:-$(tr -d '[:space:]' < VERSION)}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version: $version" >&2
+            exit 1
+          fi
+
+          # The release notes are this version's section of CHANGELOG.md. Fail before building if it's missing.
+          awk -v heading="## $version" '
+            $0 == heading { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/changes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/changes.md"; then
+            echo "CHANGELOG.md has no section for $version" >&2
+            exit 1
+          fi
+
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Toolchain
+        shell: bash
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Test
+        shell: bash
+        run: ./scripts/test.sh
 
       - name: Build artifacts
-        run: VERSION="${{ steps.version.outputs.value }}" ./scripts/build-release.sh
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: ./scripts/build-release.sh
 
       - name: Publish release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           VERSION: ${{ steps.version.outputs.value }}
-        shell: bash
         run: |
           tag="v$VERSION"
           title="Macster $VERSION"
-          notes_file="$(mktemp)"
+          notes_file="$RUNNER_TEMP/notes.md"
 
-          cat > "$notes_file" <<NOTES
-          Native SwiftUI lid-close awake toggle for macOS.
-
-          Artifacts:
-          - Macster-$VERSION.dmg
-          - Macster-$VERSION.zip
-          - checksums.txt
-          NOTES
+          {
+            echo "Keep your Mac awake with the lid closed, from the menu bar. Universal build for Apple silicon and Intel, macOS 14 or later."
+            echo
+            echo "## What's new"
+            cat "$RUNNER_TEMP/changes.md"
+            echo
+            echo "## Install"
+            echo
+            echo "Download \`Macster-$VERSION.dmg\`, open it, and drag Macster into Applications. Macster is ad-hoc signed, not notarized: if macOS blocks the first launch, open System Settings → Privacy & Security and click **Open Anyway**."
+            echo
+            echo "\`checksums.txt\` has the SHA-256 checksums of the DMG and the ZIP."
+          } > "$notes_file"
 
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release edit "$tag" --title "$title" --notes-file "$notes_file"
