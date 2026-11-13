@@ -1,0 +1,3 @@
+import MacsterApp
+
+MacsterMain.run()
